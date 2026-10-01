@@ -1,7 +1,11 @@
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/+esm';
-export const supabase=createClient('https://qhfmywontdwwfapowqpo.supabase.co',"sb_publishable_bZRuTAzX_5_SxZ9s0ofSIA_I12h1q3R",{auth:{flowType:'pkce',persistSession:true,storage:sessionStorage,autoRefreshToken:true,detectSessionInUrl:true}});
-export async function googleSignIn(){const {error}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:new URL('template.html',location.href).href,queryParams:{prompt:'select_account'}}});if(error)throw error;}
+// Preserve an existing tab session when upgrading to remembered sign-in.
+const authKey='sb-qhfmywontdwwfapowqpo-auth-token';
+try{if(!localStorage.getItem(authKey)&&sessionStorage.getItem(authKey))localStorage.setItem(authKey,sessionStorage.getItem(authKey));sessionStorage.removeItem(authKey);}catch{}
+export const supabase=createClient('https://qhfmywontdwwfapowqpo.supabase.co',"sb_publishable_bZRuTAzX_5_SxZ9s0ofSIA_I12h1q3R",{auth:{flowType:'pkce',persistSession:true,storage:localStorage,autoRefreshToken:true,detectSessionInUrl:true}});
+export async function googleSignIn(){const {error}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:new URL('template.html',location.href).href}});if(error)throw error;}
 export async function currentUser(){const {data:{session},error}=await supabase.auth.getSession();if(error)throw error;if(!session)return null;const {data:{user},error:ue}=await supabase.auth.getUser();if(ue)throw ue;if(!user?.email_confirmed_at||!user?.app_metadata?.providers?.includes('google'))throw Error('Use a verified Google account.');return user;}
 export async function api(endpoint,body){const {data:{session},error}=await supabase.auth.getSession();if(error)throw error;if(!session)throw Error('Please sign in with Google again.');const response=await fetch('https://qhfmywontdwwfapowqpo.supabase.co/functions/v1/'+endpoint,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+session.access_token,apikey:"sb_publishable_bZRuTAzX_5_SxZ9s0ofSIA_I12h1q3R",...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});const result=await response.json();if(!response.ok||!result.success)throw Error(result.error||'Request could not be completed.');return result;}
 export function clearCallback(){if(location.search||location.hash)history.replaceState(null,'',location.pathname);}
-export async function signOut(){const {error}=await supabase.auth.signOut({scope:'local'});if(error)throw error;location.replace('template.html');}
+export async function signOut(){sessionStorage.removeItem('mise_dashboard_connection');sessionStorage.removeItem('mise_application_notice');const {error}=await supabase.auth.signOut({scope:'local'});if(error)throw error;location.replace('template.html');}
+
