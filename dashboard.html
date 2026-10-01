@@ -8360,11 +8360,12 @@ appApplyLanguage=function(){
 
 </script>
 <dialog id="wireConnection" style="max-width:450px;border:1px solid;border-radius:12px;padding:24px">
-<form onsubmit="wireConnect(event)"><h2 id="wireConnectionTitle">Restaurant connection</h2><p id="wireConnectionIntro">Enter the restaurant access details supplied with your MiseAI account.</p>
-<label><span id="wireRestaurantLabel">Restaurant ID</span><input id="wireRestaurant" required autocomplete="off" style="display:block;width:100%;margin:8px 0 16px"></label>
-<label><span id="wireTokenLabel">Access token</span><input id="wireToken" type="password" required autocomplete="off" style="display:block;width:100%;margin:8px 0 16px"></label>
+<form onsubmit="wireConnect(event)"><h2 id="wireConnectionTitle">Restaurant connection</h2><p id="wireConnectionIntro">Your approved restaurant connects automatically through Google sign-in.</p>
+<label><span id="wireRestaurantLabel">Restaurant ID</span><input id="wireRestaurant" autocomplete="off" style="display:block;width:100%;margin:8px 0 16px"></label>
+<label><span id="wireTokenLabel">Access token (optional)</span><input id="wireToken" type="password" autocomplete="off" style="display:block;width:100%;margin:8px 0 16px"></label>
 <p id="wireConnectStatus" role="status"></p><button id="wireConnectSave" type="submit">Connect</button>
 <button id="wireConnectCancel" type="button" onclick="document.getElementById('wireConnection').close()">Cancel</button>
+<button id="wireGoogleReconnect" type="button" onclick="location.assign('waiting.html')">Reconnect with Google</button>
 <button id="wireDisconnectButton" type="button" onclick="wireDisconnect()">Disconnect</button></form></dialog>
 <script>
 /* Dashboard transport only. Database triggers remain authoritative for stock. */
@@ -8393,20 +8394,70 @@ function wireConnectionLanguage(){
 }
 function wireConnectOpen(){
   wireConnectionLanguage();
-  const d=document.getElementById('wireConnection');
-  document.getElementById('wireRestaurant').value=window.MISE_CONFIG.restaurantId||'';
-  document.getElementById('wireToken').value='';d.showModal();
+  const cfg=window.MISE_CONFIG||{},d=document.getElementById('wireConnection');
+  document.getElementById('wireRestaurant').value=cfg.restaurantId||'';
+  document.getElementById('wireToken').value='';
+  document.getElementById('wireTokenLabel').textContent='Access token (optional)';
+  document.getElementById('wireConnectStatus').textContent='';
+  document.getElementById('wireConnectionIntro').textContent=cfg.restaurantId&&cfg.apiToken
+    ?'Your restaurant is connected. Leave the token blank; choose Connect to check the saved connection.'
+    :'Reconnect with Google to connect automatically. For manual access, enter the Restaurant ID and token copied from your approved restaurant page.';
+  d.showModal();
+}
+async function wireResolveConnection(restaurantId,enteredToken,previous,redirectIfSignedOut=true){
+  if(enteredToken){
+    if(!restaurantId)throw new Error('Enter the Restaurant ID shown on your approved restaurant page.');
+    return {...previous,restaurantId,apiToken:enteredToken};
+  }
+  if(previous.restaurantId===restaurantId&&previous.apiToken)return {...previous};
+  const {currentUser,api}=await import('./auth.js');
+  if(!await currentUser()){
+    if(redirectIfSignedOut)location.assign('waiting.html');
+    return null;
+  }
+  const access=await api('onboarding-access');
+  if(access.status!=='approved'||!access.restaurant_id||!access.api_token)
+    throw new Error('Your approved restaurant access is not ready. Open your application status to continue.');
+  if(restaurantId&&restaurantId!==access.restaurant_id)
+    throw new Error('This Google account is linked to a different restaurant. Use Reconnect with Google to choose the correct account.');
+  return {...previous,restaurantId:access.restaurant_id,restaurantName:access.restaurant_name,
+    apiToken:access.api_token,functionsBase:access.functions_base};
 }
 async function wireConnect(event){
-  event.preventDefault();const btn=document.getElementById('wireConnectSave'),status=document.getElementById('wireConnectStatus');
+  event.preventDefault();
+  const btn=document.getElementById('wireConnectSave'),status=document.getElementById('wireConnectStatus');
   const previous={...window.MISE_CONFIG};btn.disabled=true;
-  window.MISE_CONFIG.restaurantId=document.getElementById('wireRestaurant').value.trim();
-  window.MISE_CONFIG.apiToken=document.getElementById('wireToken').value.trim();
+  status.textContent='Connecting your restaurant…';
   try{
-    const data=await wireRequest('dashboard-wire');window.MISE_CONFIG.restaurantName=data.restaurant.name;
+    const next=await wireResolveConnection(
+      document.getElementById('wireRestaurant').value.trim(),
+      document.getElementById('wireToken').value.trim(),previous);
+    if(!next){btn.disabled=false;return;}
+    window.MISE_CONFIG=next;
+    const data=await wireRequest('dashboard-wire');
+    window.MISE_CONFIG.restaurantName=data.restaurant.name;
     sessionStorage.setItem('mise_dashboard_connection',JSON.stringify(window.MISE_CONFIG));
     location.reload();
-  }catch(e){window.MISE_CONFIG=previous;status.textContent=e.message;btn.disabled=false;}
+  }catch(e){
+    window.MISE_CONFIG=previous;
+    status.textContent=e.message||'Could not connect. Use Reconnect with Google and try again.';
+    btn.disabled=false;
+  }
+}
+async function wireRestoreOnLoad(){
+  const previous={...window.MISE_CONFIG};
+  if(previous.restaurantId&&previous.apiToken)return;
+  try{
+    const next=await wireResolveConnection('','',previous,false);
+    if(!next){wireConnectOpen();return;}
+    window.MISE_CONFIG=next;
+    sessionStorage.setItem('mise_dashboard_connection',JSON.stringify(next));
+    location.reload();
+  }catch(e){
+    wireConnectOpen();
+    document.getElementById('wireConnectStatus').textContent=
+      (e.message||'Could not restore your restaurant connection.')+' Use Reconnect with Google to continue.';
+  }
 }
 function wireDisconnect(){sessionStorage.removeItem('mise_dashboard_connection');location.reload();}
 function wireNum(raw,label,required=false){
@@ -11226,6 +11277,10 @@ html body:not(#th1):not(#th2):not(#th3):not(#th4):not(#th5):not(#th6):not(#th7):
 html body:not(#sd1):not(#sd2):not(#sd3):not(#sd4):not(#sd5):not(#sd6):not(#sd7):not(#sd8):not(#sd9):not(#sd10) .page .inv-actions{margin:14px 0 0!important;justify-content:flex-start!important;}
 html body:not(#sd1):not(#sd2):not(#sd3):not(#sd4):not(#sd5):not(#sd6):not(#sd7):not(#sd8):not(#sd9):not(#sd10) .page .inv-actions .inv-actions-buttons{order:-1;margin:0!important;justify-content:flex-start!important;}
 </style>
+<script>
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',wireRestoreOnLoad,{once:true});
+else wireRestoreOnLoad();
+</script>
 </body>
 
 </html>
