@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MiseAI — Request access</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0A0A0C;color:#fff;font-family:Georgia,serif;padding:32px 18px 70px}.wrap{max-width:680px;margin:auto}.brand{color:#FDE047;letter-spacing:.18em;text-transform:uppercase;font-size:12px}.card{background:#141416;border:1px solid rgba(240,244,248,.2);border-radius:10px;padding:22px;margin-top:20px}h1{font-weight:400;font-size:34px;line-height:1.1;margin:8px 0 12px}.sub,.note{color:#A8AEB8;line-height:1.55}.steps{margin:18px 0;padding-left:20px;color:#F0F4F8}.steps li{margin:8px 0}label{display:block;color:#A8AEB8;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin:14px 0 6px}input{width:100%;background:#060608;color:white;border:1px solid rgba(240,244,248,.22);border-radius:6px;padding:12px;font:16px Georgia,serif}button{width:100%;margin-top:20px;background:#FDE047;color:#0A0A0C;border:0;border-radius:6px;padding:15px;font:700 13px Georgia,serif;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.ok{font-size:20px}.err{color:#FF6B6B;margin-top:14px}.fine{font-size:13px;color:#A8AEB8;margin-top:14px}.rule{height:3px;background:linear-gradient(90deg,#1C1E26,#0A0A0C,#FDE047);margin:18px 0}
+</style></head><body><div class="wrap">
+<div class="brand">MiseAI</div><h1>Request access</h1>
+<div class="sub">All fields below are required.</div>
+<div class="rule"></div>
+<div class="card"><strong>How onboarding works</strong><ol class="steps">
+<li>Send this request.</li><li>Michael will call or email you within one business day.</li><li>If MiseAI is a fit, your first month is a free onboarding period while we build and verify your restaurant baseline.</li><li>Once the baseline is ready, your live MiseAI account is activated.</li></ol>
+<div class="note">MiseAI is built for independent single-location operators. It does not need employee personal information, guest credit-card data, payroll access, scheduling access, or a direct POS integration.</div></div>
+<div class="card" id="card"><form id="f">
+<label>First name *</label><input id="first" required>
+<label>Last name *</label><input id="last" required>
+<label>Work email *</label><input id="email" type="email" required>
+<label>Restaurant *</label><input id="restaurant" required>
+<label>Role *</label><input id="role" required placeholder="Owner, chef-owner, operator, etc.">
+<label>Kitchen type *</label><input id="type" required placeholder="Food truck, cafe, full service, etc.">
+<label>Covers per night (avg) *</label><input id="covers" type="number" min="1" step="1" required>
+<button id="go" type="submit">Request access</button><div id="msg"></div>
+<div class="fine">Submitting this form does not create a live restaurant account and does not start billing.</div>
+</form></div></div>
+<script>
+const f=document.getElementById('f'),go=document.getElementById('go'),msg=document.getElementById('msg');
+function e(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+f.addEventListener('submit',async ev=>{ev.preventDefault();msg.innerHTML='';go.disabled=true;go.textContent='Sending…';const body={first_name:first.value.trim(),last_name:last.value.trim(),contact_email:email.value.trim(),restaurant_name:restaurant.value.trim(),role:role.value.trim(),restaurant_type:type.value.trim(),covers_per_night:covers.value};try{const r=await fetch('https://qhfmywontdwwfapowqpo.supabase.co/functions/v1/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.error||'Something went wrong.');document.getElementById('card').innerHTML='<div class="ok">Thanks — your request is in.</div><div class="note">Michael will call or email you within one business day. Nothing has been billed and no live restaurant account has been created.</div>';}catch(x){msg.innerHTML='<div class="err">'+e(x.message)+'</div>';go.disabled=false;go.textContent='Request access';}});
+</script></body></html>
