@@ -4614,25 +4614,15 @@ html,body{background:var(--mise-site-bg) !important;}
 
 </div>
 
-<div class="page" id="page-recipes"><div id="recipe-module">
-<div class="rc-heading"><div><h1>Recipes</h1></div><span id="rc-count" hidden></span></div>
-<div class="rc-toolbar"><button type="button" id="rc-new">+ New recipe</button><button type="button" id="rc-load">Load recipes</button><button type="button" id="rc-import">Import Recipe Sheet</button><input id="rc-import-file" type="file" accept=".csv,.xlsx,.xls" hidden><button type="button" id="rc-next-import" hidden>Next imported recipe</button><button type="button" id="rc-template">CSV template</button><label class="rc-access">Kitchen access code <input id="rc-code" type="password" autocomplete="off" placeholder="Chef code, if needed"></label></div>
-<p id="rc-status" role="status" aria-live="polite"></p>
-<form id="rc-form"><fieldset id="rc-editor"><div class="rc-section-head"><h2 id="rc-editor-title">Recipe template</h2><span id="rc-state">New draft</span></div>
-<div class="rc-grid">
-<label class="rc-wide">Recipe name<input id="rc-name" maxlength="180" required></label>
-<label>Type<select id="rc-type"><option value="batch">Batch Recipe</option><option value="raw">Raw Prep</option><option value="portion">Portion / Each</option><option value="service">Final Dish / Service</option></select></label>
-<label>Station<select id="rc-station" required><option value="">Choose…</option></select></label>
-<label>Expected start quantity<input id="rc-input-qty" type="number" min="0" step="any"></label><label>Start unit<select id="rc-input-unit"><option value="">Choose…</option></select></label>
-<label>Expected finished quantity<input id="rc-output-qty" type="number" min="0.000001" step="any" required></label><label>Finished unit<select id="rc-output-unit" required><option value="">Choose…</option></select></label>
-<label>Portion quantity<input id="rc-portion-qty" type="number" min="0" step="any"></label><label>Portion unit<select id="rc-portion-unit"><option value="">Choose…</option></select></label><label class="rc-wide">Shelf life<input id="rc-shelf-life" maxlength="120" placeholder="Example: 3 days refrigerated"></label></div>
-<section class="rc-panel"><h2>Ingredients &amp; batch recipes</h2><div class="rc-table-wrap"><table><thead><tr><th>Source</th><th>Ingredient / Batch Recipe</th><th>Amount</th><th>Unit</th><th>Unit cost</th><th>Line cost</th><th></th></tr></thead><tbody id="rc-lines"></tbody></table></div><button id="rc-add-line" type="button">+ Add input</button>
-<div class="rc-metrics"><div class="mise-tile"><span>Recipe cost</span><b id="rc-total-cost">—</b></div><div class="mise-tile"><span>Cost / output</span><b id="rc-unit-cost">—</b></div><div class="mise-tile"><span>Cost status</span><b id="rc-cost-status">Not calculated</b></div></div></section>
-<section class="rc-panel"><h2>Method &amp; notes</h2><div class="rc-grid"><label class="rc-wide">Method — one step per line<textarea id="rc-method"></textarea></label><label class="rc-wide">Chef notes<textarea id="rc-notes"></textarea></label></div></section>
-<div class="rc-actions"><button id="rc-preview" type="button">Recalculate cost</button><button id="rc-save" class="primary" type="submit">Save Chef Draft</button><button id="rc-approve" type="button" disabled>Approve Recipe</button></div>
-<section class="rc-panel"><h2>Recipe scale calculator</h2><div class="rc-toolbar"><label>Scale %<input id="rc-scale" type="number" min="1" max="300" value="100"></label><button id="rc-scale-run" type="button" disabled>Calculate saved recipe</button><strong id="rc-scale-output"></strong></div><ul id="rc-scale-lines"></ul></section></fieldset></form>
-<section class="rc-book"><div class="rc-section-head"><h2>Recipe collection</h2><label>Find a recipe<input id="rc-search" type="search" placeholder="Name or station"></label></div><div id="rc-recipes"><p>Load your recipe collection to begin.</p></div></section>
-</div></div>
+<div class="page" id="page-recipes">
+<section class="recipe-app-entry" style="max-width:1540px;margin:auto;padding:24px 24px 0">
+ <h1>Permanent recipe book</h1>
+ <p>Start during onboarding and keep using this same book every day. Add one recipe or upload several. No completion deadline.</p>
+ <p id="recipeAppStatus" role="status" aria-live="polite">Open Recipes to load your restaurant’s book using your existing authorized access.</p>
+ <details><summary>Chef kitchen code, if your dashboard connection uses manual restaurant access</summary><label>Authorized chef / owner kitchen code <input id="recipeKitchenCode" type="password" autocomplete="off"></label><button id="recipeAppConnect" type="button">Connect recipe access</button></details>
+</section><mise-recipe-studio id="mise-recipe-studio"></mise-recipe-studio>
+<section style="max-width:1540px;margin:auto;padding:0 24px 24px"><details><summary>Scale the selected saved recipe</summary><label>Scale % <input id="recipeAppScale" type="number" min="1" max="300" value="100"></label><button id="recipeAppScaleButton" type="button">Calculate saved recipe</button><div id="recipeAppScaleResult"></div></details></section>
+</div>
 
 <div class="page" id="page-events"><div id="event-module">
 <header class="ev-head"><div><div class="ev-kicker">Cellar · Private Events &amp; Catering</div><h1>Events &amp; Catering</h1><p>Build the menu, labor plan, costs and client quote together.</p></div><div class="ev-head-actions"><button type="button" id="ev-new">+ New Event</button><button type="button" id="ev-load">Refresh</button></div></header>
@@ -8970,103 +8960,8 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 </script>
-<script id="recipe-calculator-script">/* Recipe UI: existing prep-kitchen API; no other dashboard modules modified. */
-(()=>{'use strict';
-const el=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state={data:null,item:null,dirty:false,busy:false,pending:null,restaurant:null,version:0,importQueue:[]};
-const val=id=>el(id).value, money=n=>n==null?'—':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:4}).format(n);
-function status(s){el('rc-status').textContent=s==='Use Connect restaurant in the header first.'?'':s;}
-function buttons(){for(const id of ['rc-approve','rc-scale-run','rc-save','rc-preview','rc-add-line'])el(id).disabled=state.busy;el('rc-approve').title=state.item&&!state.dirty&&!state.item.recipe.approved_at?'Approve this saved Chef draft':'Load or save a recipe draft before approving';el('rc-scale-run').title=state.item&&!state.dirty?'Calculate this saved recipe at a new scale':'Save a recipe before calculating its scale';}
-function invalidate(){state.dirty=true;state.version++;for(const id of ['rc-total-cost','rc-unit-cost'])el(id).textContent='—';el('rc-cost-status').textContent='Recalculate';el('rc-scale-output').textContent='';el('rc-scale-lines').replaceChildren();document.querySelectorAll('#rc-lines .rc-cost').forEach(x=>x.textContent='—');buttons();}
-function options(items,selected='',key='code',label='label'){let out='<option value="">Choose…</option>';for(const x of items)out+=`<option value="${esc(x[key])}"${String(x[key])===String(selected)?' selected':''}>${esc(x[label]||x[key])}</option>`;if(selected&&!items.some(x=>String(x[key])===String(selected)))out+=`<option value="${esc(selected)}" selected>${esc(selected)} (unavailable)</option>`;return out;}
-async function request(params={},body=null){const cfg=window.MISE_CONFIG||{},base=(cfg.functionsBase||'').replace(/\/$/,'');if(!base||!cfg.restaurantId)throw Error('Use Connect restaurant in the header first.');if(state.restaurant&&state.restaurant!==cfg.restaurantId)throw Error('Restaurant changed. Reload recipes before continuing.');const headers={'Content-Type':'application/json'},code=val('rc-code').trim()||cfg.kitchenCode,token=cfg.accessToken||cfg.access_token||(/^[^.]+\.[^.]+\.[^.]+$/.test(cfg.apiToken||'')?cfg.apiToken:'');if(code)headers['x-kitchen-code']=code;else if(token)headers.Authorization='Bearer '+token;else throw Error('Enter your Chef kitchen access code, or use an Owner signed-in session.');const url=new URL(base+'/prep-kitchen');if(!body){url.searchParams.set('restaurant_id',cfg.restaurantId);for(const [k,v] of Object.entries(params))url.searchParams.set(k,v);}const res=await fetch(url,{method:body?'POST':'GET',headers,body:body?JSON.stringify({restaurant_id:cfg.restaurantId,...body}):undefined});const j=await res.json();if(!res.ok||j.success===false){const err=Error(j.error||'Recipe request failed.');err.status=res.status;throw err;}return j;}
-function collection(){const q=val('rc-search').toLowerCase();const rows=(state.data?.recipes||[]).filter(x=>(x.name+' '+x.station).toLowerCase().includes(q));el('rc-count').textContent=(state.data?.recipes||[]).length+' recipes';el('rc-recipes').innerHTML=rows.length?rows.map(x=>`<button class="rc-recipe" type="button" data-recipe="${esc(x.prep_item_id)}"><strong>${esc(x.name)}</strong><span>${esc(x.station)} · ${esc(x.recipe.recipe_type)}</span><span>${esc(x.recipe.expected_output_quantity??'—')} ${esc(x.recipe.expected_output_unit||x.unit)} · ${money(x.current_cost_per_unit)} / ${esc(x.unit)}</span><span>${x.recipe.approved_at?'Chef approved':'Chef draft'}</span></button>`).join(''):'<p>No recipes match.</p>';}
-function line(x={}){const tr=document.createElement('tr');const kind=x.stock_kind==='prep'?'prep':'ingredient';tr.innerHTML=`<td><select class="rc-kind" aria-label="Source"><option value="ingredient">Ingredient</option><option value="prep">Batch recipe</option></select></td><td><select class="rc-stock" aria-label="Ingredient or batch recipe"></select></td><td><input class="rc-amount" aria-label="Amount" type="number" min="0.000001" step="any" required value="${esc(x.amount??'')}"></td><td><select class="rc-unit" aria-label="Unit" required></select></td><td class="rc-cost">—</td><td class="rc-cost">—</td><td><button type="button" aria-label="Remove input">×</button></td>`;tr.querySelector('.rc-kind').value=kind;
-function stocks(selected=''){const k=tr.querySelector('.rc-kind').value,raw=k==='ingredient',rows=raw?(state.data?.raw_ingredients||[]):(state.data?.batch_components||[]).filter(r=>r.prep_item_id!==state.item?.prep_item_id);tr.querySelector('.rc-stock').innerHTML=options(rows,selected,raw?'ingredient_id':'prep_item_id','name');}
-stocks(x.stock_id||x.ingredient_id||x.prep_item_id);if(x.unmatched_name)tr.querySelector('.rc-stock option').textContent='Choose ingredient: '+x.unmatched_name;tr.querySelector('.rc-unit').innerHTML=options(state.data?.units||[],x.unit);tr.querySelector('.rc-kind').onchange=()=>{stocks();invalidate();};tr.querySelector('button').onclick=()=>{tr.remove();invalidate();};el('rc-lines').append(tr);}
-function open(item=null){state.item=item;el('rc-form').reset();const r=item?.recipe||{};const fields={'rc-name':item?.name,'rc-type':r.recipe_type||'batch','rc-station':item?.station,'rc-input-qty':r.expected_input_quantity,'rc-input-unit':r.expected_input_unit,'rc-output-qty':r.expected_output_quantity,'rc-output-unit':r.expected_output_unit||item?.unit,'rc-portion-qty':r.portion_quantity,'rc-portion-unit':r.portion_unit,'rc-shelf-life':r.shelf_life,'rc-method':(r.steps||[]).join('\n'),'rc-notes':r.notes};el('rc-station').innerHTML=options(state.data?.stations||[],item?.station);for(const id of ['rc-input-unit','rc-output-unit','rc-portion-unit'])el(id).innerHTML=options(state.data?.units||[],fields[id]);for(const [id,v]of Object.entries(fields))el(id).value=v??'';el('rc-lines').replaceChildren();(item?.inputs?.length?item.inputs:[{}]).forEach(line);el('rc-editor-title').textContent=item?'Recipe standard':'Recipe template';el('rc-state').textContent=r.approved_at?'Chef approved':item?'Chef draft':'New draft';invalidate();state.dirty=false;buttons();}
-async function load(keep=false){if(state.busy)return;if(!keep&&state.dirty&&!confirm('Discard unsaved recipe changes and reload?'))return;state.busy=true;buttons();status('Loading recipes…');try{if(state.restaurant!==(window.MISE_CONFIG||{}).restaurantId){state.restaurant=null;state.data=null;state.item=null;state.pending=null;}const data=await request({view:'builder'});state.data=data;state.pending=null;state.restaurant=window.MISE_CONFIG.restaurantId;const id=keep?state.item?.prep_item_id:null;collection();open(data.recipes.find(x=>x.prep_item_id===id)||null);status('');}catch(e){status(e.message);}finally{state.busy=false;buttons();}}
-function recipe(){if(!el('rc-form').reportValidity())throw Error('Complete the required recipe fields.');const number=id=>val(id)===''?null:Number(val(id));const ingredients=[...el('rc-lines').children].map(tr=>{const kind=tr.querySelector('.rc-kind').value,id=tr.querySelector('.rc-stock').value;if(!id)throw Error('Choose an ingredient or batch recipe for every line.');return {stock_kind:kind,stock_id:id,[kind==='ingredient'?'ingredient_id':'prep_item_id']:id,name:tr.querySelector('.rc-stock').selectedOptions[0]?.textContent,amount:Number(tr.querySelector('.rc-amount').value),unit:tr.querySelector('.rc-unit').value};});if(!ingredients.length)throw Error('Add at least one ingredient or batch recipe.');return {...(state.item?.recipe||{}),name:val('rc-name').trim(),recipe_type:val('rc-type'),expected_input_quantity:number('rc-input-qty'),expected_input_unit:val('rc-input-unit')||null,expected_output_quantity:number('rc-output-qty'),expected_output_unit:val('rc-output-unit'),portion_quantity:number('rc-portion-qty'),portion_unit:val('rc-portion-unit')||null,shelf_life:val('rc-shelf-life'),steps:val('rc-method').split('\n').map(x=>x.trim()).filter(Boolean),notes:val('rc-notes'),ingredients};}
-async function run(fn){if(state.busy)return;state.busy=true;buttons();el('rc-editor').disabled=true;try{await fn();}catch(e){status(e.message);}finally{state.busy=false;el('rc-editor').disabled=false;buttons();}}
-async function preview(){const r=recipe();await run(async()=>{status('Calculating…');const j=await request({}, {action:'preview_recipe',payload:{recipe:r}});el('rc-total-cost').textContent=money(j.total_cost);el('rc-unit-cost').textContent=money(j.cost_per_output);el('rc-cost-status').textContent=j.cost_complete?'Complete':'Missing cost or conversion';j.lines.forEach((x,i)=>{const cells=el('rc-lines').children[i]?.querySelectorAll('.rc-cost');if(cells){cells[0].textContent=money(x.unit_cost);cells[1].textContent=money(x.line_cost);}});status('');});}
-async function command(action){let payload;if(action==='approve_recipe'){if(!state.item)throw Error('Load or save a recipe draft before approval.');if(state.dirty)throw Error('Save the draft before approval.');if(state.item.recipe.approved_at)throw Error('This recipe is already approved.');payload={prep_item_id:state.item.prep_item_id,expected_updated_at:state.item.recipe.updated_at};}else{payload={name:val('rc-name').trim(),station:val('rc-station'),recipe:recipe()};if(state.item){payload.prep_item_id=state.item.prep_item_id;payload.expected_updated_at=state.item.recipe.updated_at;}}
-const key=JSON.stringify({restaurant:state.restaurant,action,payload});if(state.pending&&state.pending.key!==key)throw Error('A previous save has an unknown result. Reload recipes before sending different changes.');if(!state.pending)state.pending={key,request_id:crypto.randomUUID()};await run(async()=>{status('Saving…');let j;try{j=await request({}, {action,payload,request_id:state.pending.request_id});}catch(e){if(e.status&&e.status<500)state.pending=null;throw e;}state.pending=null;state.item={...j.prep_item,prep_item_id:j.prep_item.id,recipe:j.recipe,inputs:payload.recipe?.ingredients||state.item?.inputs||[]};state.dirty=false;el('rc-state').textContent=j.recipe.approved_at?'Chef approved':'Chef draft';status('Saved.');try{const data=await request({view:'builder'});state.data=data;collection();open(data.recipes.find(x=>x.prep_item_id===state.item.prep_item_id)||state.item);status('Saved.');}catch(e){status('Saved. Recipe collection could not refresh: '+e.message);}});}
-async function scale(){if(!state.item||state.dirty)throw Error('Save the recipe before scaling.');const n=Number(val('rc-scale'));if(!Number.isFinite(n)||n<1||n>300)throw Error('Scale must be between 1% and 300%.');await run(async()=>{const j=await request({prep_item_id:state.item.prep_item_id,scale_pct:n});el('rc-scale-output').textContent=j.scaled_output_quantity+' '+j.unit;el('rc-scale-lines').innerHTML=j.scaled_inputs.map(x=>`<li>${esc(x.name)} — ${esc(x.scaled_quantity)} ${esc(x.unit)}</li>`).join('');status('');});}
-function importKey(value){return String(value??'').toLowerCase().replace(/[^a-z0-9]+/g,'');}
-function importChoice(items,value,key='code',label='label'){
-  const wanted=String(value??'').trim().toLowerCase();
-  return items.find(x=>String(x[key]??'').toLowerCase()===wanted||String(x[label]??'').toLowerCase()===wanted)?.[key]||'';
-}
-function importedNext(){
-  if(!state.importQueue.length){el('rc-next-import').hidden=true;return;}
-  const entry=state.importQueue.shift();open();
-  el('rc-name').value=entry.name;el('rc-type').value=entry.type;
-  el('rc-station').value=importChoice(state.data.stations,entry.station);
-  el('rc-output-qty').value=entry.yieldQty;
-  el('rc-output-unit').value=importChoice(state.data.units,entry.yieldUnit);
-  el('rc-shelf-life').value=entry.shelfLife;
-  el('rc-method').value=entry.method;el('rc-notes').value=entry.notes;
-  el('rc-lines').replaceChildren();let unmatched=0;
-  for(const ingredient of entry.ingredients){
-    const stock=ingredient.source==='prep'?(state.data.batch_components||[]):(state.data.raw_ingredients||[]);
-    const idKey=ingredient.source==='prep'?'prep_item_id':'ingredient_id';
-    const found=stock.find(x=>String(x.name||'').trim().toLowerCase()===ingredient.name.toLowerCase());
-    const unit=importChoice(state.data.units,ingredient.unit)||ingredient.unit;
-    if(!found)unmatched++;
-    line({stock_kind:ingredient.source,stock_id:found?.[idKey]||'',unmatched_name:found?'':ingredient.name,amount:ingredient.amount,unit});
-  }
-  invalidate();el('rc-next-import').hidden=!state.importQueue.length;
-  el('rc-next-import').textContent='Next imported recipe ('+state.importQueue.length+')';
-  status('Imported '+entry.name+' as an unsaved draft.'+(unmatched?' Choose '+unmatched+' unmatched ingredient'+(unmatched===1?'':'s')+' before saving.':' Review, then Save Chef Draft.')+(state.importQueue.length?' '+state.importQueue.length+' recipe(s) remain.':''));
-  el('rc-editor').scrollIntoView({behavior:'smooth',block:'start'});
-}
-async function importParsedRows(headers,rows){
-  if(state.dirty&&!confirm('Discard unsaved recipe changes and import this sheet?'))throw Error('Import cancelled.');
-  if(!state.data)await load();
-  if(!state.data)throw Error('Load recipes first. Enter your Chef kitchen access code on the Recipes tab if requested.');
-  const keys=headers.map(importKey),column=(...aliases)=>{for(const alias of aliases){const i=keys.indexOf(importKey(alias));if(i>=0)return i;}return -1;};
-  const idx={name:column('recipe name','recipe'),station:column('station'),yieldQty:column('yield qty','yield quantity','batch yield'),yieldUnit:column('yield unit','output unit'),ingredient:column('ingredient','ingredient name'),amount:column('amount','ingredient amount','quantity'),unit:column('unit','ingredient unit'),source:column('source'),type:column('type','recipe type'),method:column('method','steps'),notes:column('notes'),shelf:column('shelf life')};
-  if(['name','station','yieldQty','yieldUnit','ingredient','amount','unit'].some(k=>idx[k]<0))throw Error('Recipe sheet needs Recipe Name, Station, Yield Qty, Yield Unit, Ingredient, Amount, and Unit columns.');
-  const value=(row,key)=>idx[key]<0?'':String(row[idx[key]]??'').trim(),groups=new Map();
-  for(const row of rows){
-    const name=value(row,'name'),ingredient=value(row,'ingredient'),amount=Number(value(row,'amount'));
-    if(!name&&!ingredient)continue;
-    if(!name||!ingredient||!Number.isFinite(amount)||amount<=0)throw Error('Every recipe row needs a name, ingredient, and positive amount.');
-    const groupKey=name.toLowerCase();
-    if(!groups.has(groupKey))groups.set(groupKey,{name,station:value(row,'station'),yieldQty:value(row,'yieldQty'),yieldUnit:value(row,'yieldUnit'),type:value(row,'type')||'batch',method:value(row,'method').replace(/\s*\|\s*/g,'\n'),notes:value(row,'notes'),shelfLife:value(row,'shelf'),ingredients:[]});
-    const group=groups.get(groupKey);
-    group.ingredients.push({name:ingredient,amount,unit:value(row,'unit'),source:value(row,'source').toLowerCase()==='prep'?'prep':'ingredient'});
-  }
-  if(!groups.size)throw Error('No recipe rows found.');
-  for(const group of groups.values()){
-    if(!importChoice(state.data.stations,group.station))throw Error('Station "'+group.station+'" on '+group.name+' is not in this restaurant.');
-    if(!Number.isFinite(Number(group.yieldQty))||Number(group.yieldQty)<=0||!importChoice(state.data.units,group.yieldUnit))throw Error('Use a positive yield and a known yield unit for '+group.name+'.');
-    if(!['batch','raw','portion','service'].includes(group.type))throw Error('Recipe type must be batch, raw, portion, or service for '+group.name+'.');
-    for(const ingredient of group.ingredients)if(!ingredient.unit)throw Error('Each ingredient needs a unit in '+group.name+'.');
-  }
-  state.importQueue=[...groups.values()];const count=state.importQueue.length;showTab('recipes');importedNext();return {recipes:count,rows:rows.length};
-}
-window.rcImportParsedRows=importParsedRows;
-async function importFile(file){
-  if(!file)return;
-  let table;
-  if(/\.csv$/i.test(file.name))table=uplParseCsv(await file.text());
-  else if(/\.xlsx?$/i.test(file.name)&&typeof XLSX!=='undefined'){
-    const book=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:false});
-    table=XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]],{header:1,raw:false,defval:''});
-  }else throw Error('Choose a CSV or Excel file. Excel requires the spreadsheet reader to load.');
-  table=(table||[]).filter(row=>Array.isArray(row)&&row.some(v=>String(v??'').trim()));
-  if(table.length<2)throw Error('No recipe rows found.');
-  await importParsedRows(table[0],table.slice(1));
-}
-const safe=fn=>()=>Promise.resolve().then(fn).catch(e=>status(e.message));el('rc-load').onclick=()=>load();el('rc-code').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();load();}});el('rc-new').onclick=()=>{if(!state.dirty||confirm('Discard unsaved changes and start a new recipe?'))open();};el('rc-add-line').onclick=()=>{line();invalidate();};el('rc-form').onsubmit=e=>{e.preventDefault();safe(()=>command(state.item?'save_recipe':'create_recipe'))();};el('rc-preview').onclick=safe(preview);el('rc-approve').onclick=safe(()=>command('approve_recipe'));el('rc-scale-run').onclick=safe(scale);el('rc-search').oninput=collection;el('rc-editor').addEventListener('input',e=>{if(e.target.id!=='rc-scale')invalidate();});el('rc-editor').addEventListener('change',e=>{if(e.target.id!=='rc-scale')invalidate();});el('rc-recipes').onclick=e=>{const b=e.target.closest('[data-recipe]');if(b&&(!state.dirty||confirm('Discard unsaved changes and open this recipe?'))){open(state.data.recipes.find(x=>x.prep_item_id===b.dataset.recipe));el('rc-editor').scrollIntoView({behavior:'smooth',block:'start'});}};
-el('rc-import').onclick=()=>el('rc-import-file').click();
-el('rc-import-file').onchange=e=>{const file=e.target.files?.[0];e.target.value='';Promise.resolve().then(()=>importFile(file)).catch(error=>status(error.message));};
-el('rc-next-import').onclick=()=>{if(!state.dirty||confirm('Discard this unsaved recipe and open the next imported recipe?'))importedNext();};
-el('rc-template').onclick=()=>{const csv='Recipe Name,Station,Type,Yield Qty,Yield Unit,Ingredient,Amount,Unit,Source,Method,Notes,Shelf Life\nCaesar Dressing,salads,batch,1,qt,Olive Oil,8,fl oz,ingredient,Whisk together,Keep chilled,3 days\nCaesar Dressing,salads,batch,1,qt,Lemon Juice,2,fl oz,ingredient,,,\n';const blob=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='recipe-import-template.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
-window.addEventListener('beforeunload',e=>{if(state.dirty||state.pending){e.preventDefault();e.returnValue='';}});window.rcShow=()=>{showTab('recipes');if(!state.data)load();};open();
-})();
-</script>
+<script src="mise-recipe-module.js"></script>
+<script src="mise-recipe-app.js"></script>
 <script id="event-calculator-script">(()=>{'use strict';const $=id=>document.getElementById(id),state={recipes:[],events:[],current:null,proposal:null,busy:false};const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),n=x=>Number.isFinite(Number(x))?Number(x):0,money=x=>Number.isFinite(Number(x))?'$'+Number(x).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—',msg=x=>{$('ev-status').textContent=x};
 function cfg(){const x=window.MISE_CONFIG||{};return{base:(x.functionsBase||'').replace(/\/$/,''),restaurantId:x.restaurantId||'',apiToken:x.apiToken||''}}
 async function api(action,data={}){const c=cfg();if(!c.base||!c.restaurantId||!c.apiToken)throw Error('Connect restaurant in the dashboard header first.');const h={Authorization:'Bearer '+c.apiToken,'Content-Type':'application/json'};let url=c.base+'/events-sync',body;if(action==='load'){url+='?restaurant_id='+encodeURIComponent(c.restaurantId);const r=await fetch(url,{headers:h}),j=await r.json();if(!r.ok||!j.success)throw Error(j.error||'Could not load events.');return j;}body={restaurant_id:c.restaurantId,api_token:c.apiToken,action,...data};const r=await fetch(url,{method:'POST',headers:h,body:JSON.stringify(body)}),j=await r.json();if(!r.ok||!j.success)throw Error(j.error||'Event action failed.');return j;}
@@ -11284,3 +11179,4 @@ else wireRestoreOnLoad();
 </body>
 
 </html>
+
